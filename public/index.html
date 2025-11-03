@@ -1,0 +1,64 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Group Listener - Scan QR</title>
+  <style>
+    body { font-family: Arial, sans-serif; display:flex; flex-direction:column; align-items:center; padding:20px; }
+    #qr { width: 320px; height: 320px; border:1px solid #ddd; display:flex; align-items:center; justify-content:center; }
+    img { max-width:100%; max-height:100%; }
+    .info { margin-top: 12px; }
+    .status { margin-top: 8px; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h2>Group Listener — Scan QR</h2>
+  <div id="qr">Aguardando QR...</div>
+  <div class="info">
+    <div>Grupo monitorado: <strong id="group-name"></strong></div>
+    <div>Mulheres: <span id="women-names"></span></div>
+    <div>Homens: <span id="men-names"></span></div>
+  </div>
+  <div class="status" id="status">Status: desconectado</div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    const qrBox = document.getElementById('qr');
+    const status = document.getElementById('status');
+    const groupNameEl = document.getElementById('group-name');
+    const womenEl = document.getElementById('women-names');
+    const menEl = document.getElementById('men-names');
+
+    socket.on('connect', () => {
+      status.textContent = 'Status: conectado ao servidor';
+    });
+
+    socket.on('qr', (dataUrl) => {
+      qrBox.innerHTML = '<img src="' + dataUrl + '" alt="QR Code" />';
+      status.textContent = 'Status: QR gerado — escaneie com o WhatsApp';
+    });
+
+    socket.on('session', (msg) => {
+      qrBox.innerHTML = '<div style="padding:12px">Sessão criada: ' + msg + '</div>';
+      status.textContent = 'Status: sessão criada / pronto';
+    });
+
+    socket.on('ready', () => {
+      status.textContent = 'Status: pronto (conectado ao WhatsApp)';
+      qrBox.innerHTML = '<div style="padding:12px">Conectado! Você pode fechar essa tela.</div>';
+    });
+
+    socket.on('group-config', (cfg) => {
+      groupNameEl.textContent = cfg.group || '';
+      womenEl.textContent = cfg.women || '';
+      menEl.textContent = cfg.men || '';
+    });
+
+    socket.on('disconnect', () => {
+      status.textContent = 'Status: desconectado';
+    });
+  </script>
+</body>
+</html>
