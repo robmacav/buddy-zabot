@@ -44,8 +44,12 @@ const MEN_NAMES = (process.env.MEN_NAMES)
       let currentText = text;
       const addedToWaitList = [];
 
-      const isEmptyLine = (line) =>
-        /^\s*\d{1,2}\s*[-.:]?\s*(|[-–—_.\s]*)$/i.test(line);
+      const isEmptyLine = (line) => {
+        return (
+          /^\s*\d{1,2}\s*[-.:]?\s*(|[-–—_.\s]*)$/i.test(line) ||
+          /\bmulher\b/i.test(line)
+        );
+      };
 
       for (const name of WOMAN_NAMES) {
         if (alreadyInList(name, currentText)) continue;
@@ -89,37 +93,62 @@ const MEN_NAMES = (process.env.MEN_NAMES)
         if (!placed) addedToWaitList.push(name);
       }
 
-      if (addedToWaitList.length > 0) {
-        const idxWaitHeader = lines.findIndex((l) =>
-          /lista de espera integrantes do grupo/i.test(l)
-        );
+if (addedToWaitList.length > 0) {
+  const idxWaitHeader = lines.findIndex((l) =>
+    /lista de espera integrantes do grupo/i.test(l)
+  );
 
-        if (idxWaitHeader !== -1) {
-          let insertIndex = idxWaitHeader + 1;
-          for (let i = idxWaitHeader + 1; i < lines.length; i++) {
-            if (lines[i].trim() === '') break; // fim da seção
-            if (/^\s*[-•]?\s*\w+/i.test(lines[i])) {
-              insertIndex = i + 1;
-            } else {
-              break;
-            }
-          }
+  if (idxWaitHeader !== -1) {
+    const idxNextSection = lines.findIndex(
+      (l, i) => i > idxWaitHeader && /lista de espera convidados/i.test(l)
+    );
 
-          const newLines = addedToWaitList.map((n) => `${n}`);
-          lines.splice(insertIndex, 0, ...newLines);
-          updated = true;
+    const waitSectionEnd = idxNextSection !== -1 ? idxNextSection : lines.length;
 
-          console.log(
-            'Sem vagas disponíveis — nomes adicionados à lista de espera:',
-            addedToWaitList.join(', ')
-          );
-        } else {
-          console.warn(
-            '"Lista de espera integrantes do grupo" não encontrada — nomes não inseridos:',
-            addedToWaitList.join(', ')
-          );
-        }
+    // Coletar linhas da seção de espera
+    const sectionLines = lines.slice(idxWaitHeader + 1, waitSectionEnd);
+
+    // Expressão p/ detectar linhas numeradas vazias (1., 1 -, 1 etc.)
+    const emptySlotRegex = /^\s*\d{1,2}\s*[-.:]?\s*$/;
+
+    const filled = new Set();
+    let updated = false;
+    const newNames = [...addedToWaitList];
+
+    for (let i = 0; i < sectionLines.length && newNames.length > 0; i++) {
+      if (emptySlotRegex.test(sectionLines[i])) {
+        const slotNumber = sectionLines[i].match(/\d{1,2}/)?.[0] || '';
+        const name = newNames.shift();
+        sectionLines[i] = `${slotNumber}. ${name}`;
+        filled.add(name);
+        updated = true;
       }
+    }
+
+    // Se ainda sobrou nome e não há numerações vazias → adiciona antes da próxima seção
+    if (newNames.length > 0) {
+      const insertIndex = waitSectionEnd;
+      const toInsert = newNames.map((n) => `${n}`);
+      lines.splice(insertIndex, 0, ...toInsert);
+      updated = true;
+    }
+
+    // Atualiza as linhas da seção de espera no texto original
+    lines.splice(idxWaitHeader + 1, sectionLines.length, ...sectionLines);
+
+    console.log(
+      'Sem vagas disponíveis — nomes adicionados à lista de espera:',
+      addedToWaitList.join(', ')
+    );
+  } else {
+    console.warn(
+      '"Lista de espera integrantes do grupo" não encontrada — nomes não inseridos:',
+      addedToWaitList.join(', ')
+    );
+  }
+}
+
+
 
       return updated ? lines.join('\n') : text;
     }
@@ -153,6 +182,9 @@ const MEN_NAMES = (process.env.MEN_NAMES)
     });
 
     client.onMessage((message) => {
+      console.log('----------------- Nova Mensagem -----------------');
+      console.log('----------------- Nova Mensagem -----------------');
+      console.log('----------------- Nova Mensagem -----------------');
       console.log('----------------- Nova Mensagem -----------------');
       console.log('De:', message.from);
       console.log('Grupo:', message.chat?.name || '(privado)');
