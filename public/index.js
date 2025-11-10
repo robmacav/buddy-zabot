@@ -1,18 +1,6 @@
 require('dotenv').config();
 const wppconnect = require('@wppconnect-team/wppconnect');
 
-const processedMessages = new Set();
-
-const WOMAN_NAMES = (process.env.WOMAN_NAMES)
-  .split(',')
-  .map((n) => n.trim())
-  .filter(Boolean);
-
-const MEN_NAMES = (process.env.MEN_NAMES)
-  .split(',')
-  .map((n) => n.trim())
-  .filter(Boolean);
-
 (async () => {
   try {
     const client = await wppconnect.create({
@@ -26,156 +14,11 @@ const MEN_NAMES = (process.env.MEN_NAMES)
         console.log('Status da sessão:', statusSession);
       }
     });
-
-    function fillList(text) {
-      const lines = text.split('\n');
-      const numberedIndices = [];
-
-      for (let i = 0; i < lines.length; i++) {
-        if (/^\s*\d{1,2}\s*[-.:]?\s*/.test(lines[i])) {
-          numberedIndices.push(i);
-        }
-      }
-
-      const alreadyInList = (name, currentText) =>
-        new RegExp(`\\b${name}\\b`, 'i').test(currentText);
-
-      let updated = false;
-      let currentText = text;
-      const addedToWaitList = [];
-
-      const isEmptyLine = (line) => {
-        return (
-          /^\s*\d{1,2}\s*[-.:]?\s*(|[-–—_.\s]*)$/i.test(line) ||
-          /\bmulher\b/i.test(line)
-        );
-      };
-
-      for (const name of WOMAN_NAMES) {
-        if (alreadyInList(name, currentText)) continue;
-        let placed = false;
-
-        for (let pos = 1; pos <= 5; pos++) {
-          const idx = numberedIndices[pos - 1];
-          if (idx === undefined) continue;
-
-          const line = lines[idx];
-          if (!isEmptyLine(line)) continue;
-
-          lines[idx] = `${String(pos).padStart(2, '0')} ${name}`;
-          updated = true;
-          currentText = lines.join('\n');
-          placed = true;
-          break;
-        }
-
-        if (!placed) addedToWaitList.push(name);
-      }
-
-      for (const name of MEN_NAMES) {
-        if (alreadyInList(name, currentText)) continue;
-        let placed = false;
-
-        for (let pos = 6; pos <= 20; pos++) {
-          const idx = numberedIndices[pos - 1];
-          if (idx === undefined) continue;
-
-          const line = lines[idx];
-          if (!isEmptyLine(line)) continue;
-
-          lines[idx] = `${String(pos).padStart(2, '0')} ${name}`;
-          updated = true;
-          currentText = lines.join('\n');
-          placed = true;
-          break;
-        }
-
-        if (!placed) addedToWaitList.push(name);
-      }
-
-if (addedToWaitList.length > 0) {
-  const idxWaitHeader = lines.findIndex((l) =>
-    /lista de espera integrantes do grupo/i.test(l)
-  );
-
-  if (idxWaitHeader !== -1) {
-    const idxNextSection = lines.findIndex(
-      (l, i) => i > idxWaitHeader && /lista de espera convidados/i.test(l)
-    );
-
-    const waitSectionEnd = idxNextSection !== -1 ? idxNextSection : lines.length;
-
-    // Coletar linhas da seção de espera
-    const sectionLines = lines.slice(idxWaitHeader + 1, waitSectionEnd);
-
-    // Expressão p/ detectar linhas numeradas vazias (1., 1 -, 1 etc.)
-    const emptySlotRegex = /^\s*\d{1,2}\s*[-.:]?\s*$/;
-
-    const filled = new Set();
-    let updated = false;
-    const newNames = [...addedToWaitList];
-
-    for (let i = 0; i < sectionLines.length && newNames.length > 0; i++) {
-      if (emptySlotRegex.test(sectionLines[i])) {
-        const slotNumber = sectionLines[i].match(/\d{1,2}/)?.[0] || '';
-        const name = newNames.shift();
-        sectionLines[i] = `${slotNumber}. ${name}`;
-        filled.add(name);
-        updated = true;
-      }
-    }
-
-    // Se ainda sobrou nome e não há numerações vazias → adiciona antes da próxima seção
-    if (newNames.length > 0) {
-      const insertIndex = waitSectionEnd;
-      const toInsert = newNames.map((n) => `${n}`);
-      lines.splice(insertIndex, 0, ...toInsert);
-      updated = true;
-    }
-
-    // Atualiza as linhas da seção de espera no texto original
-    lines.splice(idxWaitHeader + 1, sectionLines.length, ...sectionLines);
-
-    console.log(
-      'Sem vagas disponíveis — nomes adicionados à lista de espera:',
-      addedToWaitList.join(', ')
-    );
-  } else {
-    console.warn(
-      '"Lista de espera integrantes do grupo" não encontrada — nomes não inseridos:',
-      addedToWaitList.join(', ')
-    );
-  }
-}
-
-
-
-      return updated ? lines.join('\n') : text;
-    }
-
     // Escuta todas as mensagens
     client.onAnyMessage(async (message) => {
       try {
         const text = message.body || message.text || '';
-        if (!text) return;
 
-        if (processedMessages.has(message.id)) return;
-        processedMessages.add(message.id);
-
-        if (text.includes('PIX 69992282748 Lauany da Silva')) {
-          console.log('\nLista detectada!');
-          console.log('--- Mensagem original ---\n' + text);
-
-          const updatedList = fillList(text);
-
-          if (updatedList !== text) {
-            console.log('Lista atualizada:\n' + updatedList);
-            await client.sendText(message.chatId || message.from, updatedList);
-            console.log('Lista enviada com sucesso!');
-          } else {
-            console.log('Nenhuma vaga vazia encontrada ou já preenchida.');
-          }
-        }
       } catch (err) {
         console.error('Erro ao processar mensagem:', err);
       }
